@@ -1,0 +1,121 @@
+// Teste de identificação do driver do display SPI.
+// Troque a linha ativa em CANDIDATO (e o panel_width/height correspondente)
+// e grave. Observe qual combinação desenha as 3 cores corretamente,
+// preenchendo a tela inteira, sem deslocamento nem corte.
+
+#define LGFX_USE_V1
+#include <LovyanGFX.hpp>
+
+// ---- Pinos (iguais aos já definidos no InvTron.ino) ----
+// Correspondência com os rótulos impressos no módulo do display:
+//#define TFT_MISO 19 // (sem correspondência no display -- usado só pelo cartão SD)
+// // Pinagem para WeAct:
+// #define TFT_SCL   04
+// #define TFT_SDA   16
+// #define TFT_RST   17
+// #define TFT_DC    18
+// #define TFT_CS    19
+// #define TFT_BL    21
+
+// Pinagem para TFT SPI:
+#define TFT_BL    04 // TFT_LED
+#define TFT_SCL   16 // TFT_SCK
+#define TFT_SDA   17 // TFT_SDA
+#define TFT_DC    18 // TFT_A0
+#define TFT_RST   19 // TFT_RESET
+#define TFT_CS    21 // TFT_CS
+
+#define TFT_MISO  -1 // TFT does not need MISO pin
+
+// ---- Escolha UM candidato por vez (comente os outros) ----
+#define CANDIDATO_ST7735   // painel 1,8" 128x160 -- mais provável
+//#define CANDIDATO_ILI9341  // painel 2,2"-2,8" 240x320
+//#define CANDIDATO_ILI9488  // painel 3,5"-4" 320x480
+
+class LGFX_Teste : public lgfx::LGFX_Device {
+#if defined(CANDIDATO_ST7735)
+  lgfx::Panel_ST7735S _panel_instance;
+#elif defined(CANDIDATO_ILI9341)
+  lgfx::Panel_ILI9341 _panel_instance;
+#elif defined(CANDIDATO_ILI9488)
+  lgfx::Panel_ILI9488 _panel_instance;
+#endif
+  lgfx::Bus_SPI _bus_instance;
+
+public:
+  LGFX_Teste() {
+    {
+      auto cfg = _bus_instance.config();
+      cfg.spi_host    = VSPI_HOST;
+      cfg.spi_mode    = 0;
+      cfg.freq_write  = 16000000; // reduzido para o teste, evita dúvida de timing
+      cfg.freq_read   = 10000000;
+      cfg.spi_3wire   = false; // este display não tem pino de leitura (SDO) -- não precisa do modo 3-wire
+      cfg.use_lock    = true;
+      cfg.dma_channel = SPI_DMA_CH_AUTO;
+      cfg.pin_sclk    = TFT_SCL;
+      cfg.pin_mosi    = TFT_SDA;
+      cfg.pin_miso    = TFT_MISO;
+      cfg.pin_dc      = TFT_DC;
+      _bus_instance.config(cfg);
+      _panel_instance.setBus(&_bus_instance);
+    }
+    {
+      auto cfg = _panel_instance.config();
+      cfg.pin_cs   = TFT_CS;
+      cfg.pin_rst  = TFT_RST;
+      cfg.pin_busy = -1;
+
+#if defined(CANDIDATO_ST7735)
+      cfg.panel_width  = 128;
+      cfg.panel_height = 160;
+#elif defined(CANDIDATO_ILI9341)
+      cfg.panel_width  = 240;
+      cfg.panel_height = 320;
+#elif defined(CANDIDATO_ILI9488)
+      cfg.panel_width  = 320;
+      cfg.panel_height = 480;
+#endif
+      cfg.offset_x = 0;
+      cfg.offset_y = 0;
+      cfg.readable = false; // sem pino MISO ligado ao display -- desabilita tentativas de leitura
+      _panel_instance.config(cfg);
+    }
+    setPanel(&_panel_instance);
+  }
+};
+
+LGFX_Teste tft;
+
+void setup() {
+  Serial.begin(115200);
+
+  // Este sketch de teste não usa Light_PWM, então liga o backlight manualmente
+  pinMode(TFT_BL, OUTPUT);
+  digitalWrite(TFT_BL, HIGH);
+
+  tft.init();
+  tft.setRotation(3); // 0: 0 degrees (normal portrait mode); 1: 90 degrees clockwise (landscape mode); 2: 180 degrees (inverted portrait); 3: 270 degrees clockwise (inverted landscape)
+
+  Serial.printf("Resolucao configurada: %dx%d\n", tft.width(), tft.height());
+
+  tft.fillScreen(TFT_RED);
+  delay(1000);
+  tft.fillScreen(TFT_GREEN);
+  delay(1000);
+  tft.fillScreen(TFT_BLUE);
+  delay(1000);
+
+  // Desenha uma borda de 1px na tela inteira: se a tela real for menor
+  // que o panel_width/height configurado, a borda vai sumir/cortar num dos lados.
+  tft.fillScreen(TFT_BLACK);
+  tft.drawRect(0, 0, tft.width(), tft.height(), TFT_WHITE);
+  tft.setCursor(10, 10);
+  tft.setTextColor(TFT_WHITE);
+  tft.setTextSize(2);
+  tft.printf("%dx%d", tft.width(), tft.height());
+
+  Serial.println("Fim do teste");
+}
+
+void loop() {}

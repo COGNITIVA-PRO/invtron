@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "test_invtron_pins",
+			"path": "test_invtron_pins"
+		}
+	],
+	"settings": {}
+}
